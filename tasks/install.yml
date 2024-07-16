@@ -15,7 +15,7 @@
     state: present
   when:
     - ansible_service_mgr == 'systemd'
-    - ansible_os_family == 'RedHat'
+    - ansible_os_family == 'RedHat' or ansible_os_family == 'Rocky'
     - ansible_distribution_version.split(".")[0] >= '9'
 
 - name: Ensure service wrapper is installed for RHEL 7 & 8.
@@ -26,7 +26,7 @@
     state: present
   when:
     - ansible_service_mgr == 'systemd'
-    - ansible_os_family == 'RedHat'
+    - ansible_os_family == 'RedHat'  or ansible_os_family == 'Rocky'
     - ansible_distribution_version.split(".")[0] <= '8'
 
 - name: Ensure service wrapper is installed for Debian-based distributions.
@@ -52,11 +52,23 @@
     creates={{ solr_install_path }}/bin/solr
   register: solr_install_script_result
 
+- name: Ensure solr initscript is executable
+  sefcontext:
+    setype: initrc_exec_t
+    target: /etc/init.d/solr
+    state: present
+  register: filecontext
+  when: ansible_selinux is defined and ansible_selinux != False and ansible_selinux.status == 'enabled'
+
+- name: Restore SEcontext on solr initscript
+  shell: "restorecon -R -v /etc/init.d/solr"
+  when: filecontext is changed
+
 # Workaround for bug https://github.com/ansible/ansible-modules-core/issues/915.
 - name: Ensure solr is stopped (RHEL 7+ workaround).
   command: service {{ solr_service_name }} stop
   when:
-    - ansible_os_family == 'RedHat'
+    - ansible_os_family == 'RedHat' or ansible_os_family == 'Rocky'
     - ansible_distribution_version.split(".")[0] >= '7'
     - solr_install_script_result.changed
   failed_when: false
@@ -67,7 +79,7 @@
     name: solr
     daemon_reload: true
   when:
-    - ansible_os_family == 'RedHat'
+    - ansible_os_family == 'RedHat' or ansible_os_family == 'Rocky'
     - ansible_distribution_version.split(".")[0] >= '7'
     - solr_install_script_result.changed
   tags: ['skip_ansible_lint']
